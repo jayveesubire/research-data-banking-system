@@ -136,6 +136,7 @@ def register():
 # ======================================================
 def admin_dashboard(page):
     conn = get_db()
+    df = pd.read_sql_query("SELECT * FROM projects", conn)
 
     if page == "Dashboard":
         st.header("Admin Dashboard")
@@ -155,37 +156,62 @@ def admin_dashboard(page):
         c3.metric("On-going", int(stats.ongoing[0] or 0))
         c4.metric("Total Budget", f"₱{stats.total_budget[0] or 0:,.2f}")
 
-    df = pd.read_sql_query("SELECT * FROM projects", conn)
-
     if page == "Manage Projects":
         st.subheader("Manage Projects")
         st.dataframe(df, use_container_width=True)
 
-        pid = st.selectbox("Select Project ID", df["id"].tolist())
-        rec = df[df["id"] == pid].iloc[0]
+        if df.empty:
+            st.info("No records available.")
+            conn.close()
+            return
 
-        title = st.text_input("Project Title", rec.project_title, key=f"a_t_{pid}")
+        pid = st.selectbox("Select Project ID", df["id"].tolist())
+        record_df = df[df["id"] == pid]
+
+        if record_df.empty:
+            st.warning("Selected project no longer exists.")
+            conn.close()
+            return
+
+        rec = record_df.iloc[0]
+
+        title = st.text_input("Project Title", rec.project_title)
+        leader = st.text_input("Project Leader", rec.project_leader)
+        staff = st.text_area("Project Staff", rec.project_staff)
+        start = st.text_input("Starting Date", rec.start_date)
+        end = st.text_input("Completion Date", rec.completion_date)
+        budget = st.number_input("Budget", min_value=0.0, value=float(rec.budget))
+        fund = st.text_input("Fund Source", rec.fund_source)
+        loc = st.text_input("Location", rec.location)
+        rtype = st.text_input("Type of Research", rec.research_type)
         status = st.selectbox(
             "Status",
             ["New","Completed","Continuing","On-going"],
-            index=["New","Completed","Continuing","On-going"].index(rec.status),
-            key=f"a_s_{pid}"
+            index=["New","Completed","Continuing","On-going"].index(rec.status)
         )
+        remarks = st.text_area("Remarks", rec.remarks)
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Update", key=f"a_u_{pid}"):
+            if st.button("Update Project"):
                 cur = conn.cursor()
-                cur.execute(
-                    "UPDATE projects SET project_title=?, status=? WHERE id=?",
-                    (title, status, pid)
-                )
+                cur.execute("""
+                    UPDATE projects SET
+                        project_title=?, project_leader=?, project_staff=?,
+                        start_date=?, completion_date=?, budget=?,
+                        fund_source=?, location=?, research_type=?,
+                        status=?, remarks=?
+                    WHERE id=?
+                """, (
+                    title, leader, staff, start, end, budget,
+                    fund, loc, rtype, status, remarks, pid
+                ))
                 conn.commit()
                 st.success("Project updated.")
                 st.rerun()
 
         with col2:
-            if st.button("Delete", key=f"a_d_{pid}"):
+            if st.button("Delete Project"):
                 cur = conn.cursor()
                 cur.execute("DELETE FROM projects WHERE id=?", (pid,))
                 conn.commit()
@@ -216,51 +242,77 @@ def admin_dashboard(page):
 # USER DASHBOARD
 # ======================================================
 def user_dashboard(page):
-    st.header("Project Leader Dashboard")
-
     conn = get_db()
 
     if page == "Add Project":
         st.subheader("Add New Project")
+
         title = st.text_input("Project Title")
+        leader = st.text_input("Project Leader")
+        staff = st.text_area("Project Staff")
+        start = st.date_input("Starting Date")
+        end = st.date_input("Completion Date")
+        budget = st.number_input("Budget", min_value=0.0)
+        fund = st.text_input("Fund Source")
+        loc = st.text_input("Location")
+        rtype = st.text_input("Type of Research")
         status = st.selectbox("Status", ["New","Completed","Continuing","On-going"])
+        remarks = st.text_area("Remarks")
 
         if st.button("Save Project"):
             cur = conn.cursor()
-            cur.execute(
-                "INSERT INTO projects (user_id, project_title, status) VALUES (?,?,?)",
-                (st.session_state.user_id, title, status)
-            )
+            cur.execute("""
+                INSERT INTO projects (
+                    user_id, project_title, project_leader, project_staff,
+                    start_date, completion_date, budget,
+                    fund_source, location, research_type,
+                    status, remarks
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                st.session_state.user_id, title, leader, staff,
+                str(start), str(end), budget,
+                fund, loc, rtype, status, remarks
+            ))
             conn.commit()
-            st.success("Project saved. You may add another.")
+            st.success("Project saved.")
             st.rerun()
 
-    df = pd.read_sql_query(
-        "SELECT * FROM projects WHERE user_id=?",
-        conn, params=(st.session_state.user_id,)
-    )
-
     if page == "My Projects":
+        df = pd.read_sql_query(
+            "SELECT * FROM projects WHERE user_id=?",
+            conn, params=(st.session_state.user_id,)
+        )
+
         st.subheader("My Projects")
         st.dataframe(df, use_container_width=True)
 
-        pid = st.selectbox("Edit Project ID", df["id"].tolist())
-        rec = df[df["id"] == pid].iloc[0]
+        if df.empty:
+            conn.close()
+            return
 
-        title = st.text_input("Project Title", rec.project_title, key=f"u_t_{pid}")
+        pid = st.selectbox("Edit Project ID", df["id"].tolist())
+        record_df = df[df["id"] == pid]
+
+        if record_df.empty:
+            st.warning("Selected project no longer exists.")
+            conn.close()
+            return
+
+        rec = record_df.iloc[0]
+
+        title = st.text_input("Project Title", rec.project_title)
         status = st.selectbox(
             "Status",
             ["New","Completed","Continuing","On-going"],
-            index=["New","Completed","Continuing","On-going"].index(rec.status),
-            key=f"u_s_{pid}"
+            index=["New","Completed","Continuing","On-going"].index(rec.status)
         )
 
         if st.button("Update My Project"):
             cur = conn.cursor()
-            cur.execute(
-                "UPDATE projects SET project_title=?, status=? WHERE id=? AND user_id=?",
-                (title, status, pid, st.session_state.user_id)
-            )
+            cur.execute("""
+                UPDATE projects SET project_title=?, status=?
+                WHERE id=? AND user_id=?
+            """, (title, status, pid, st.session_state.user_id))
             conn.commit()
             st.success("Project updated.")
             st.rerun()
@@ -298,4 +350,3 @@ def main():
             user_dashboard(page)
 
 main()
-
