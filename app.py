@@ -14,33 +14,6 @@ st.set_page_config(
 )
 
 # ======================================================
-# SIDEBAR: DARK MODE
-# ======================================================
-dark = st.sidebar.toggle("🌙 Dark Mode")
-
-if dark:
-    st.markdown("""
-    <style>
-    .stApp {background-color:#1a1a1a;color:white;}
-    input, textarea, select {background-color:#2b2b2b !important;color:white;}
-    </style>
-    """, unsafe_allow_html=True)
-else:
-    st.markdown("""
-    <style>
-    .stApp {background-color:#f7f9f7;}
-    h1, h2, h3 {color:#1f7a1f;font-weight:700;}
-    .stButton>button {
-        background-color:#1f7a1f;
-        color:white;
-        border-radius:8px;
-        font-weight:600;
-    }
-    .stButton>button:hover {background-color:#2e9e2e;}
-    </style>
-    """, unsafe_allow_html=True)
-
-# ======================================================
 # DATABASE
 # ======================================================
 def get_db():
