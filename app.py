@@ -266,6 +266,9 @@ def admin_dashboard(page):
 def user_dashboard(page):
     conn = get_db()
 
+    # ==================================================
+    # ADD PROJECT
+    # ==================================================
     if page == "Add Project":
         st.subheader("Add New Project")
 
@@ -274,13 +277,13 @@ def user_dashboard(page):
         staff = st.text_area("Project Staff (Regular / COS)")
         start = st.date_input("Starting Date")
         end = st.date_input("Completion Date")
-        budget = st.number_input("Budget", min_value=0.0)
+        budget = st.number_input("Budget", min_value=0.0, format="%.2f")
         fund = st.text_input("Fund Source")
         loc = st.text_input("Location")
         rtype = st.text_input("Type of Research")
         status = st.selectbox(
             "Status",
-            ["New","Completed","Continuing","On-going"]
+            ["New", "Completed", "Continuing", "On-going"]
         )
         remarks = st.text_area("Remarks")
 
@@ -294,23 +297,86 @@ def user_dashboard(page):
                     status, remarks
                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
-                st.session_state.user_id, title, leader, staff,
+                st.session_state.user_id,
+                title, leader, staff,
                 str(start), str(end), budget,
-                fund, loc, rtype, status, remarks
+                fund, loc, rtype,
+                status, remarks
             ))
             conn.commit()
             log_action("USER ADD", title)
-            st.success("Project saved.")
+            st.success("Project saved successfully.")
             st.rerun()
 
+    # ==================================================
+    # MY PROJECTS (VIEW + EDIT OWN)
+    # ==================================================
     if page == "My Projects":
+        st.subheader("My Projects")
+
         df = pd.read_sql_query(
             "SELECT * FROM projects WHERE user_id=?",
-            conn, params=(st.session_state.user_id,)
+            conn,
+            params=(st.session_state.user_id,)
         )
 
-        st.subheader("My Projects")
+        if df.empty:
+            st.info("You have not submitted any projects yet.")
+            conn.close()
+            return
+
         st.dataframe(format_df(df), use_container_width=True)
+
+        st.markdown("### Edit Selected Project")
+
+        pid = st.selectbox("Select Project ID", df["id"].tolist())
+
+        record_df = df[df["id"] == pid]
+        if record_df.empty:
+            st.warning("Selected project no longer exists.")
+            conn.close()
+            return
+
+        rec = record_df.iloc[0]
+
+        etitle = st.text_input("Project Title", rec.project_title)
+        eleader = st.text_input("Project Leader", rec.project_leader)
+        estaff = st.text_area("Project Staff", rec.project_staff)
+        estart = st.text_input("Starting Date", rec.start_date)
+        eend = st.text_input("Completion Date", rec.completion_date)
+        ebudget = st.number_input(
+            "Budget", min_value=0.0, value=float(rec.budget)
+        )
+        efund = st.text_input("Fund Source", rec.fund_source)
+        eloc = st.text_input("Location", rec.location)
+        etype = st.text_input("Type of Research", rec.research_type)
+        estatus = st.selectbox(
+            "Status",
+            ["New", "Completed", "Continuing", "On-going"],
+            index=["New","Completed","Continuing","On-going"].index(rec.status)
+        )
+        eremarks = st.text_area("Remarks", rec.remarks)
+
+        if st.button("Update My Project"):
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE projects SET
+                    project_title=?, project_leader=?, project_staff=?,
+                    start_date=?, completion_date=?, budget=?,
+                    fund_source=?, location=?, research_type=?,
+                    status=?, remarks=?
+                WHERE id=? AND user_id=?
+            """, (
+                etitle, eleader, estaff,
+                estart, eend, ebudget,
+                efund, eloc, etype,
+                estatus, eremarks,
+                pid, st.session_state.user_id
+            ))
+            conn.commit()
+            log_action("USER UPDATE", etitle)
+            st.success("Project updated successfully.")
+            st.rerun()
 
     conn.close()
 
