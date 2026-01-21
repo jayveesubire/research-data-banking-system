@@ -213,7 +213,13 @@ def admin_dashboard(page):
         staff = st.text_area("Project Staff", rec.project_staff)
         start = st.text_input("Starting Date", rec.start_date)
         end = st.text_input("Completion Date", rec.completion_date)
-        budget = st.number_input("Budget", min_value=0.0, value=float(rec.budget))
+        safe_budget = float(rec.budget) if rec.budget not in (None, "", "NULL") else 0.0
+        budget = st.number_input(
+            "Budget",
+            min_value=0.0,
+            value=safe_budget,
+            format="%.2f"
+        )
         fund = st.text_input("Fund Source", rec.fund_source)
         loc = st.text_input("Location", rec.location)
         rtype = st.text_input("Type of Research", rec.research_type)
@@ -344,8 +350,12 @@ def user_dashboard(page):
         estaff = st.text_area("Project Staff", rec.project_staff)
         estart = st.text_input("Starting Date", rec.start_date)
         eend = st.text_input("Completion Date", rec.completion_date)
+        safe_budget = float(rec.budget) if rec.budget not in (None, "", "NULL") else 0.0
         ebudget = st.number_input(
-            "Budget", min_value=0.0, value=float(rec.budget)
+            "Budget",
+            min_value=0.0,
+            value=safe_budget,
+            format="%.2f"
         )
         efund = st.text_input("Fund Source", rec.fund_source)
         eloc = st.text_input("Location", rec.location)
