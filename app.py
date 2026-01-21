@@ -357,8 +357,26 @@ def user_dashboard(page):
         etitle = st.text_input("Project Title", rec.project_title)
         eleader = st.text_input("Project Leader", rec.project_leader)
         estaff = st.text_area("Project Staff", rec.project_staff)
-        estart = st.text_input("Starting Date", rec.start_date)
-        eend = st.text_input("Completion Date", rec.completion_date)
+        # ---- SAFE DATE CONVERSION ----
+        try:
+            start_date_val = datetime.strptime(rec.start_date, "%Y-%m-%d").date()
+        except:
+            start_date_val = datetime.today().date()
+
+        try:
+            end_date_val = datetime.strptime(rec.completion_date, "%Y-%m-%d").date()
+        except:
+            end_date_val = datetime.today().date()
+
+        estart = st.date_input(
+            "Starting Date",
+            value=start_date_val
+        )
+
+        eend = st.date_input(
+            "Completion Date",
+            value=end_date_val
+        )
 
         safe_budget = float(rec.budget) if rec.budget not in (None, "", "NULL") else 0.0
         ebudget = st.number_input(
