@@ -4,6 +4,7 @@ import pandas as pd
 from io import BytesIO
 from datetime import datetime
 import os
+import plotly.express as px
 
 # ======================================================
 # PAGE CONFIG
@@ -189,66 +190,140 @@ def admin_dashboard(page):
     df = pd.read_sql_query("SELECT * FROM projects", conn)
 
     if page == "Dashboard":
-        st.subheader("Admin Dashboard")
+        st.subheader("📊 Admin Dashboard Overview")
 
-        # -----------------------------
-        # LOAD DATA
-        # -----------------------------
         df = pd.read_sql_query("SELECT * FROM projects", conn)
 
         if df.empty:
             st.info("No project records available.")
             return
 
-        # Ensure date column is datetime
+        # Convert date
         df["start_date"] = pd.to_datetime(df["start_date"], errors="coerce")
+        df["year"] = df["start_date"].dt.year
+        df["budget"] = df["budget"].fillna(0)
 
-        # -----------------------------
-        # FILTER CONTROLS
-        # -----------------------------
-        col1, col2 = st.columns(2)
+        # ===============================
+        # FILTERS (SIDEBAR STYLE)
+        # ===============================
+        st.markdown("### 🔍 Filters")
+        f1, f2 = st.columns(2)
 
-        with col1:
+        with f1:
             status_filter = st.selectbox(
-                "Filter by Status",
+                "Project Status",
                 ["All", "New", "On-going", "Completed", "Continuing"]
             )
 
-        with col2:
-            years = sorted(df["start_date"].dropna().dt.year.unique().tolist())
-            year_filter = st.selectbox(
-                "Filter by Year",
-                ["All"] + years
-            )
+        with f2:
+            years = sorted(df["year"].dropna().unique().tolist())
+            year_filter = st.selectbox("Year", ["All"] + years)
 
-        # -----------------------------
-        # APPLY FILTERS
-        # -----------------------------
+        # Apply filters
         filtered_df = df.copy()
 
         if status_filter != "All":
             filtered_df = filtered_df[filtered_df["status"] == status_filter]
 
         if year_filter != "All":
-            filtered_df = filtered_df[
-                filtered_df["start_date"].dt.year == year_filter
-            ]
+            filtered_df = filtered_df[filtered_df["year"] == year_filter]
 
-        # -----------------------------
-        # METRICS (DYNAMIC)
-        # -----------------------------
-        total_projects = len(filtered_df)
-        total_budget = filtered_df["budget"].fillna(0).sum()
+        # ===============================
+        # KPI CARDS
+        # ===============================
+        st.markdown("### 📌 Key Indicators")
+        k1, k2, k3 = st.columns(3)
 
+        k1.metric("TOTAL PROJECTS", len(filtered_df))
+        k2.metric(
+            "TOTAL BUDGET",
+            f"₱{filtered_df['budget'].sum():,.2f}"
+        )
+        k3.metric(
+            "AVERAGE BUDGET",
+            f"₱{filtered_df['budget'].mean():,.2f}" if len(filtered_df) else "₱0.00"
+        )
+
+        st.markdown("---")
+
+        # ===============================
+        # CHARTS
+        # ===============================
         c1, c2 = st.columns(2)
-        c1.metric("TOTAL PROJECTS", total_projects)
-        c2.metric("TOTAL BUDGET", f"₱{total_budget:,.2f}")
 
-        # -----------------------------
-        # DISPLAY TABLE
-        # -----------------------------
-        st.markdown("### Filtered Project List")
+        # ---- Budget by Status ----
+        if not filtered_df.empty:
+            budget_status = (
+                filtered_df
+                .groupby("status")["budget"]
+                .sum()
+                .reset_index()
+            )
+
+            fig1 = px.bar(
+                budget_status,
+                x="status",
+                y="budget",
+                title="💰 Total Budget by Status",
+                labels={"status": "Status", "budget": "Budget"},
+                text_auto=True
+            )
+            fig1.update_layout(height=350)
+
+            c1.plotly_chart(fig1, use_container_width=True)
+
+        # ---- Projects per Year ----
+        if not filtered_df.empty:
+            proj_year = (
+                filtered_df
+                .groupby("year")
+                .size()
+                .reset_index(name="projects")
+            )
+
+            fig2 = px.bar(
+                proj_year,
+                x="year",
+                y="projects",
+                title="📅 Projects per Year",
+                labels={"year": "Year", "projects": "Number of Projects"},
+                text_auto=True
+            )
+            fig2.update_layout(height=350)
+
+            c2.plotly_chart(fig2, use_container_width=True)
+
+        st.markdown("---")
+
+        # ===============================
+        # BUDGET TREND
+        # ===============================
+        if not filtered_df.empty:
+            budget_trend = (
+                filtered_df
+                .groupby("year")["budget"]
+                .sum()
+                .reset_index()
+            )
+
+            fig3 = px.line(
+                budget_trend,
+                x="year",
+                y="budget",
+                markers=True,
+                title="📈 Budget Trend by Year",
+                labels={"year": "Year", "budget": "Total Budget"}
+            )
+            fig3.update_layout(height=350)
+
+            st.plotly_chart(fig3, use_container_width=True)
+
+        # ===============================
+        # TABLE
+        # ===============================
+        st.markdown("### 📄 Filtered Project Records")
         st.dataframe(format_df(filtered_df), use_container_width=True)
+
 
     if page == "Manage Projects":
         st.subheader("Manage Projects")
