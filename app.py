@@ -191,20 +191,64 @@ def admin_dashboard(page):
     if page == "Dashboard":
         st.subheader("Admin Dashboard")
 
-        stats = pd.read_sql_query("""
-        SELECT
-            COUNT(*) total,
-            SUM(CASE WHEN status='Completed' THEN 1 ELSE 0 END) completed,
-            SUM(CASE WHEN status='On-going' THEN 1 ELSE 0 END) ongoing,
-            SUM(budget) total_budget
-        FROM projects
-        """, conn)
+        # -----------------------------
+        # LOAD DATA
+        # -----------------------------
+        df = pd.read_sql_query("SELECT * FROM projects", conn)
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("TOTAL PROJECTS", int(stats.total[0]))
-        c2.metric("COMPLETED", int(stats.completed[0] or 0))
-        c3.metric("ON-GOING", int(stats.ongoing[0] or 0))
-        c4.metric("TOTAL BUDGET", f"₱{stats.total_budget[0] or 0:,.2f}")
+        if df.empty:
+            st.info("No project records available.")
+            return
+
+        # Ensure date column is datetime
+        df["start_date"] = pd.to_datetime(df["start_date"], errors="coerce")
+
+        # -----------------------------
+        # FILTER CONTROLS
+        # -----------------------------
+        col1, col2 = st.columns(2)
+
+        with col1:
+            status_filter = st.selectbox(
+                "Filter by Status",
+                ["All", "New", "On-going", "Completed", "Continuing"]
+            )
+
+        with col2:
+            years = sorted(df["start_date"].dropna().dt.year.unique().tolist())
+            year_filter = st.selectbox(
+                "Filter by Year",
+                ["All"] + years
+            )
+
+        # -----------------------------
+        # APPLY FILTERS
+        # -----------------------------
+        filtered_df = df.copy()
+
+        if status_filter != "All":
+            filtered_df = filtered_df[filtered_df["status"] == status_filter]
+
+        if year_filter != "All":
+            filtered_df = filtered_df[
+                filtered_df["start_date"].dt.year == year_filter
+            ]
+
+        # -----------------------------
+        # METRICS (DYNAMIC)
+        # -----------------------------
+        total_projects = len(filtered_df)
+        total_budget = filtered_df["budget"].fillna(0).sum()
+
+        c1, c2 = st.columns(2)
+        c1.metric("TOTAL PROJECTS", total_projects)
+        c2.metric("TOTAL BUDGET", f"₱{total_budget:,.2f}")
+
+        # -----------------------------
+        # DISPLAY TABLE
+        # -----------------------------
+        st.markdown("### Filtered Project List")
+        st.dataframe(format_df(filtered_df), use_container_width=True)
 
     if page == "Manage Projects":
         st.subheader("Manage Projects")
