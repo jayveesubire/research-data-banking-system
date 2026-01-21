@@ -92,17 +92,24 @@ def init_db():
 # ======================================================
 # UTILITIES
 # ======================================================
-def log_action(action, title):
+def log_action(action, project_title):
     conn = get_db()
     cur = conn.cursor()
+
     cur.execute("""
-        INSERT INTO audit_log VALUES (NULL,?,?,?,?)
+        INSERT INTO audit_log (
+            username,
+            action,
+            project_title,
+            timestamp
+        ) VALUES (?,?,?,?)
     """, (
-        st.session_state.get("username"),
+        st.session_state.get("username", "UNKNOWN"),
         action,
-        title,
+        project_title,
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
+
     conn.commit()
     conn.close()
 
