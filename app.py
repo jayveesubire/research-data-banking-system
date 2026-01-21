@@ -16,6 +16,32 @@ st.set_page_config(
 )
 
 # ======================================================
+# GLOBAL STYLE (UPGRADED UI)
+# ======================================================
+st.markdown("""
+<style>
+.stApp {background-color:#f4f7f5;}
+.card {
+    background:white;
+    padding:20px;
+    border-radius:16px;
+    box-shadow:0 4px 14px rgba(0,0,0,0.08);
+    margin-bottom:20px;
+}
+.kpi {
+    background:linear-gradient(135deg,#1f7a1f,#3cb043);
+    color:white;
+    padding:24px;
+    border-radius:18px;
+    text-align:center;
+}
+.kpi h2 {margin:0;font-size:34px;}
+.kpi p {margin:0;font-size:14px;opacity:0.9;}
+h1,h2,h3 {color:#1f7a1f;}
+</style>
+""", unsafe_allow_html=True)
+
+# ======================================================
 # DATABASE
 # ======================================================
 def get_db():
@@ -25,7 +51,6 @@ def init_db():
     conn = get_db()
     cur = conn.cursor()
 
-    # USERS
     cur.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,7 +60,6 @@ def init_db():
     )
     """)
 
-    # PROJECTS
     cur.execute("""
     CREATE TABLE IF NOT EXISTS projects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,7 +78,6 @@ def init_db():
     )
     """)
 
-    # AUDIT LOG
     cur.execute("""
     CREATE TABLE IF NOT EXISTS audit_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,19 +88,16 @@ def init_db():
     )
     """)
 
-    # DEFAULT USERS
     defaults = [
-        ("admin", "admin123", "admin"),
-        ("RND", "rnd123", "user"),
-        ("CARES", "cares123", "user"),
-        ("QARES", "qares123", "user"),
-        ("RARES", "rares123", "user"),
+        ("admin","admin123","admin"),
+        ("RND","rnd123","user"),
+        ("CARES","cares123","user"),
+        ("QARES","qares123","user"),
+        ("RARES","rares123","user")
     ]
 
     for u in defaults:
-        cur.execute(
-            "SELECT * FROM users WHERE username=?", (u[0],)
-        )
+        cur.execute("SELECT * FROM users WHERE username=?", (u[0],))
         if not cur.fetchone():
             cur.execute(
                 "INSERT INTO users (username,password,role) VALUES (?,?,?)", u
@@ -87,39 +107,36 @@ def init_db():
     conn.close()
 
 # ======================================================
-# AUDIT LOG
+# UTILITIES
 # ======================================================
-def log_action(action, project_title):
+def log_action(action, title):
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO audit_log (username, action, project_title, timestamp)
         VALUES (?,?,?,?)
     """, (
-        st.session_state.get("username"),
+        st.session_state.get("username","SYSTEM"),
         action,
-        project_title,
+        title,
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
     conn.commit()
     conn.close()
 
-# ======================================================
-# FORMAT TABLE
-# ======================================================
 def format_df(df):
     df = df.copy()
-    df.columns = [c.replace("_", " ").upper() for c in df.columns]
+    df.columns = [c.replace("_"," ").upper() for c in df.columns]
     return df
 
 # ======================================================
 # HEADER
 # ======================================================
 st.markdown("""
-<div style="background:#1f7a1f;padding:20px;border-radius:12px;color:white;">
+<div class="card" style="background:#1f7a1f;color:white;">
 <h2>Department of Agriculture – RFO CALABARZON</h2>
 <p>Research Project Data Banking System</p>
-</div><br>
+</div>
 """, unsafe_allow_html=True)
 
 # ======================================================
@@ -127,23 +144,20 @@ st.markdown("""
 # ======================================================
 def login():
     st.subheader("Login")
-
     u = st.text_input("Username")
     p = st.text_input("Password", type="password")
 
-    col1, col2 = st.columns(2)
-
+    col1,col2 = st.columns(2)
     with col1:
         if st.button("Login"):
             conn = get_db()
             cur = conn.cursor()
             cur.execute(
                 "SELECT id, role FROM users WHERE username=? AND password=?",
-                (u, p)
+                (u,p)
             )
             user = cur.fetchone()
             conn.close()
-
             if user:
                 st.session_state.user_id = user[0]
                 st.session_state.role = user[1]
@@ -159,11 +173,10 @@ def login():
             st.rerun()
 
 # ======================================================
-# VIEWER (READ ONLY)
+# VIEWER
 # ======================================================
 def viewer_dashboard():
-    st.subheader("All Research Projects (View Only)")
-
+    st.subheader("📄 All Research Projects (View Only)")
     conn = get_db()
     df = pd.read_sql_query("SELECT * FROM projects", conn)
     conn.close()
@@ -171,253 +184,142 @@ def viewer_dashboard():
     search = st.text_input("Search Project Title")
     status = st.selectbox(
         "Filter Status",
-        ["All", "New", "Completed", "Continuing", "On-going"]
+        ["All","New","On-going","Completed","Continuing"]
     )
 
     if search:
         df = df[df["project_title"].str.contains(search, case=False)]
-
-    if status != "All":
-        df = df[df["status"] == status]
+    if status!="All":
+        df = df[df["status"]==status]
 
     st.dataframe(format_df(df), use_container_width=True)
 
 # ======================================================
-# ADMIN
+# ADMIN DASHBOARD
 # ======================================================
 def admin_dashboard(page):
     conn = get_db()
     df = pd.read_sql_query("SELECT * FROM projects", conn)
 
-    if page == "Dashboard":
-        st.subheader("📊 Admin Dashboard Overview")
-
-        df = pd.read_sql_query("SELECT * FROM projects", conn)
+    if page=="Dashboard":
+        st.subheader("📊 Admin Dashboard")
 
         if df.empty:
-            st.info("No project records available.")
+            st.info("No records available.")
             return
 
-        # Convert date
         df["start_date"] = pd.to_datetime(df["start_date"], errors="coerce")
         df["year"] = df["start_date"].dt.year
         df["budget"] = df["budget"].fillna(0)
 
-        # ===============================
-        # FILTERS (SIDEBAR STYLE)
-        # ===============================
-        st.markdown("### 🔍 Filters")
-        f1, f2 = st.columns(2)
-
-        with f1:
-            status_filter = st.selectbox(
-                "Project Status",
-                ["All", "New", "On-going", "Completed", "Continuing"]
+        colf1,colf2 = st.columns(2)
+        with colf1:
+            status = st.selectbox(
+                "Status",
+                ["All","New","On-going","Completed","Continuing"]
             )
-
-        with f2:
+        with colf2:
             years = sorted(df["year"].dropna().unique().tolist())
-            year_filter = st.selectbox("Year", ["All"] + years)
+            year = st.selectbox("Year", ["All"]+years)
 
-        # Apply filters
-        filtered_df = df.copy()
+        fdf = df.copy()
+        if status!="All":
+            fdf = fdf[fdf["status"]==status]
+        if year!="All":
+            fdf = fdf[fdf["year"]==year]
 
-        if status_filter != "All":
-            filtered_df = filtered_df[filtered_df["status"] == status_filter]
-
-        if year_filter != "All":
-            filtered_df = filtered_df[filtered_df["year"] == year_filter]
-
-        # ===============================
-        # KPI CARDS
-        # ===============================
-        st.markdown("### 📌 Key Indicators")
-        k1, k2, k3 = st.columns(3)
-
-        k1.metric("TOTAL PROJECTS", len(filtered_df))
-        k2.metric(
-            "TOTAL BUDGET",
-            f"₱{filtered_df['budget'].sum():,.2f}"
-        )
-        k3.metric(
-            "AVERAGE BUDGET",
-            f"₱{filtered_df['budget'].mean():,.2f}" if len(filtered_df) else "₱0.00"
-        )
+        k1,k2,k3 = st.columns(3)
+        k1.markdown(f"<div class='kpi'><h2>{len(fdf)}</h2><p>Total Projects</p></div>", unsafe_allow_html=True)
+        k2.markdown(f"<div class='kpi'><h2>₱{fdf['budget'].sum():,.0f}</h2><p>Total Budget</p></div>", unsafe_allow_html=True)
+        avg = fdf['budget'].mean() if len(fdf) else 0
+        k3.markdown(f"<div class='kpi'><h2>₱{avg:,.0f}</h2><p>Average Budget</p></div>", unsafe_allow_html=True)
 
         st.markdown("---")
 
-        # ===============================
-        # CHARTS
-        # ===============================
-        c1, c2 = st.columns(2)
-
-        # ---- Budget by Status ----
-        if not filtered_df.empty:
-            budget_status = (
-                filtered_df
-                .groupby("status")["budget"]
-                .sum()
-                .reset_index()
-            )
-
+        if not fdf.empty:
             fig1 = px.bar(
-                budget_status,
-                x="status",
-                y="budget",
-                title="💰 Total Budget by Status",
-                labels={"status": "Status", "budget": "Budget"},
+                fdf.groupby("status")["budget"].sum().reset_index(),
+                x="status", y="budget",
+                title="Total Budget by Status",
                 text_auto=True
             )
-            fig1.update_layout(height=350)
-
+            fig2 = px.line(
+                fdf.groupby("year")["budget"].sum().reset_index(),
+                x="year", y="budget",
+                markers=True,
+                title="Budget Trend by Year"
+            )
+            c1,c2 = st.columns(2)
             c1.plotly_chart(fig1, use_container_width=True)
-
-        # ---- Projects per Year ----
-        if not filtered_df.empty:
-            proj_year = (
-                filtered_df
-                .groupby("year")
-                .size()
-                .reset_index(name="projects")
-            )
-
-            fig2 = px.bar(
-                proj_year,
-                x="year",
-                y="projects",
-                title="📅 Projects per Year",
-                labels={"year": "Year", "projects": "Number of Projects"},
-                text_auto=True
-            )
-            fig2.update_layout(height=350)
-
             c2.plotly_chart(fig2, use_container_width=True)
 
-        st.markdown("---")
+        st.markdown("### Project Records")
+        st.dataframe(format_df(fdf), use_container_width=True)
 
-        # ===============================
-        # BUDGET TREND
-        # ===============================
-        if not filtered_df.empty:
-            budget_trend = (
-                filtered_df
-                .groupby("year")["budget"]
-                .sum()
-                .reset_index()
-            )
-
-            fig3 = px.line(
-                budget_trend,
-                x="year",
-                y="budget",
-                markers=True,
-                title="📈 Budget Trend by Year",
-                labels={"year": "Year", "budget": "Total Budget"}
-            )
-            fig3.update_layout(height=350)
-
-            st.plotly_chart(fig3, use_container_width=True)
-
-        # ===============================
-        # TABLE
-        # ===============================
-        st.markdown("### 📄 Filtered Project Records")
-        st.dataframe(format_df(filtered_df), use_container_width=True)
-
-
-    if page == "Manage Projects":
+    if page=="Manage Projects":
         st.subheader("Manage Projects")
         st.dataframe(format_df(df), use_container_width=True)
 
-        if df.empty:
-            conn.close()
-            return
-
         pid = st.selectbox("Select Project ID", df["id"].tolist())
-        rec = df[df["id"] == pid].iloc[0]
+        rec = df[df["id"]==pid].iloc[0]
 
         title = st.text_input("Project Title", rec.project_title)
-        leader = st.text_input("Project Leader", rec.project_leader)
-        staff = st.text_area("Project Staff", rec.project_staff)
-        start = st.text_input("Starting Date", rec.start_date)
-        end = st.text_input("Completion Date", rec.completion_date)
-        safe_budget = float(rec.budget) if rec.budget not in (None, "", "NULL") else 0.0
-        budget = st.number_input(
-            "Budget",
-            min_value=0.0,
-            value=safe_budget,
-            format="%.2f"
-        )
-        fund = st.text_input("Fund Source", rec.fund_source)
-        loc = st.text_input("Location", rec.location)
-        rtype = st.text_input("Type of Research", rec.research_type)
         status = st.selectbox(
             "Status",
             ["New","Completed","Continuing","On-going"],
             index=["New","Completed","Continuing","On-going"].index(rec.status)
         )
-        remarks = st.text_area("Remarks", rec.remarks)
 
-        col1, col2 = st.columns(2)
+        col1,col2 = st.columns(2)
         with col1:
-            if st.button("Update Project"):
+            if st.button("Update"):
                 cur = conn.cursor()
-                cur.execute("""
-                    UPDATE projects SET
-                        project_title=?, project_leader=?, project_staff=?,
-                        start_date=?, completion_date=?, budget=?,
-                        fund_source=?, location=?, research_type=?,
-                        status=?, remarks=?
-                    WHERE id=?
-                """, (
-                    title, leader, staff, start, end, budget,
-                    fund, loc, rtype, status, remarks, pid
-                ))
+                cur.execute(
+                    "UPDATE projects SET project_title=?, status=? WHERE id=?",
+                    (title,status,pid)
+                )
                 conn.commit()
                 log_action("ADMIN UPDATE", title)
-                st.success("Project updated.")
+                st.success("Updated")
                 st.rerun()
-
         with col2:
-            if st.button("Delete Project"):
+            if st.button("Delete"):
                 cur = conn.cursor()
                 cur.execute("DELETE FROM projects WHERE id=?", (pid,))
                 conn.commit()
                 log_action("ADMIN DELETE", title)
-                st.warning("Project deleted.")
+                st.warning("Deleted")
                 st.rerun()
 
-    if page == "Audit Log":
+    if page=="Audit Log":
         st.subheader("Audit Log")
-        log_df = pd.read_sql_query("SELECT * FROM audit_log ORDER BY id DESC", conn)
+        log_df = pd.read_sql_query(
+            "SELECT * FROM audit_log ORDER BY id DESC", conn
+        )
         st.dataframe(format_df(log_df), use_container_width=True)
 
     conn.close()
 
 # ======================================================
-# USER / ENCODER
+# USER DASHBOARD
 # ======================================================
 def user_dashboard(page):
     conn = get_db()
 
-    # ==================================================
-    # ADD PROJECT
-    # ==================================================
-    if page == "Add Project":
+    if page=="Add Project":
         st.subheader("Add New Project")
-
         title = st.text_input("Project Title")
         leader = st.text_input("Project Leader")
-        staff = st.text_area("Project Staff (Regular / COS)")
+        staff = st.text_area("Project Staff")
         start = st.date_input("Starting Date")
         end = st.date_input("Completion Date")
-        budget = st.number_input("Budget", min_value=0.0, format="%.2f")
+        budget = st.number_input("Budget", min_value=0.0)
         fund = st.text_input("Fund Source")
         loc = st.text_input("Location")
         rtype = st.text_input("Type of Research")
         status = st.selectbox(
             "Status",
-            ["New", "Completed", "Continuing", "On-going"]
+            ["New","Completed","Continuing","On-going"]
         )
         remarks = st.text_area("Remarks")
 
@@ -425,135 +327,64 @@ def user_dashboard(page):
             cur = conn.cursor()
             cur.execute("""
                 INSERT INTO projects (
-                    user_id, project_title, project_leader, project_staff,
-                    start_date, completion_date, budget,
-                    fund_source, location, research_type,
-                    status, remarks
+                    user_id,project_title,project_leader,project_staff,
+                    start_date,completion_date,budget,
+                    fund_source,location,research_type,
+                    status,remarks
                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
-                st.session_state.user_id,
-                title, leader, staff,
-                str(start), str(end), budget,
-                fund, loc, rtype,
-                status, remarks
+                st.session_state.user_id,title,leader,staff,
+                str(start),str(end),budget,
+                fund,loc,rtype,status,remarks
             ))
             conn.commit()
             log_action("USER ADD", title)
-            st.success("Project saved successfully.")
+            st.success("Saved")
             st.rerun()
 
-    # ==================================================
-    # MY PROJECTS (VIEW + EDIT + DELETE OWN)
-    # ==================================================
-    if page == "My Projects":
-        st.subheader("My Projects")
-
+    if page=="My Projects":
         df = pd.read_sql_query(
             "SELECT * FROM projects WHERE user_id=?",
-            conn,
-            params=(st.session_state.user_id,)
+            conn, params=(st.session_state.user_id,)
         )
-
-        if df.empty:
-            st.info("You have not submitted any projects yet.")
-            conn.close()
-            return
-
+        st.subheader("My Projects")
         st.dataframe(format_df(df), use_container_width=True)
 
-        st.markdown("### Edit / Delete Selected Project")
-
         pid = st.selectbox("Select Project ID", df["id"].tolist())
+        rec = df[df["id"]==pid].iloc[0]
 
-        record_df = df[df["id"] == pid]
-        if record_df.empty:
-            st.warning("Selected project no longer exists.")
-            conn.close()
-            return
-
-        rec = record_df.iloc[0]
-
-        etitle = st.text_input("Project Title", rec.project_title)
-        eleader = st.text_input("Project Leader", rec.project_leader)
-        estaff = st.text_area("Project Staff", rec.project_staff)
-        # ---- SAFE DATE CONVERSION ----
-        try:
-            start_date_val = datetime.strptime(rec.start_date, "%Y-%m-%d").date()
-        except:
-            start_date_val = datetime.today().date()
-
-        try:
-            end_date_val = datetime.strptime(rec.completion_date, "%Y-%m-%d").date()
-        except:
-            end_date_val = datetime.today().date()
-
-        estart = st.date_input(
-            "Starting Date",
-            value=start_date_val
-        )
-
-        eend = st.date_input(
-            "Completion Date",
-            value=end_date_val
-        )
-
-        safe_budget = float(rec.budget) if rec.budget not in (None, "", "NULL") else 0.0
-        ebudget = st.number_input(
-            "Budget",
-            min_value=0.0,
-            value=safe_budget,
-            format="%.2f"
-        )
-
-        efund = st.text_input("Fund Source", rec.fund_source)
-        eloc = st.text_input("Location", rec.location)
-        etype = st.text_input("Type of Research", rec.research_type)
-        estatus = st.selectbox(
+        title = st.text_input("Project Title", rec.project_title)
+        status = st.selectbox(
             "Status",
-            ["New", "Completed", "Continuing", "On-going"],
-            index=["New", "Completed", "Continuing", "On-going"].index(rec.status)
+            ["New","Completed","Continuing","On-going"],
+            index=["New","Completed","Continuing","On-going"].index(rec.status)
         )
-        eremarks = st.text_area("Remarks", rec.remarks)
 
-        col1, col2 = st.columns(2)
-
-        # -------- UPDATE --------
+        col1,col2 = st.columns(2)
         with col1:
-            if st.button("Update My Project"):
+            if st.button("Update"):
                 cur = conn.cursor()
-                cur.execute("""
-                    UPDATE projects SET
-                        project_title=?, project_leader=?, project_staff=?,
-                        start_date=?, completion_date=?, budget=?,
-                        fund_source=?, location=?, research_type=?,
-                        status=?, remarks=?
-                    WHERE id=? AND user_id=?
-                """, (
-                    etitle, eleader, estaff,
-                    estart, eend, ebudget,
-                    efund, eloc, etype,
-                    estatus, eremarks,
-                    pid, st.session_state.user_id
-                ))
+                cur.execute(
+                    "UPDATE projects SET project_title=?, status=? WHERE id=? AND user_id=?",
+                    (title,status,pid,st.session_state.user_id)
+                )
                 conn.commit()
-                log_action("USER UPDATE", etitle)
-                st.success("Project updated successfully.")
+                log_action("USER UPDATE", title)
+                st.success("Updated")
                 st.rerun()
-
-        # -------- DELETE --------
         with col2:
-            if st.button("Delete My Project"):
+            if st.button("Delete"):
                 cur = conn.cursor()
                 cur.execute(
                     "DELETE FROM projects WHERE id=? AND user_id=?",
-                    (pid, st.session_state.user_id)
+                    (pid,st.session_state.user_id)
                 )
                 conn.commit()
-                log_action("USER DELETE", etitle)
-                st.warning("Project deleted.")
+                log_action("USER DELETE", title)
+                st.warning("Deleted")
                 st.rerun()
 
-        conn.close()
+    conn.close()
 
 # ======================================================
 # SIDEBAR
@@ -577,20 +408,18 @@ def main():
             st.session_state.clear()
             st.rerun()
 
-        if st.session_state.role == "admin":
+        if st.session_state.role=="admin":
             page = st.sidebar.radio(
                 "Admin Pages",
-                ["Dashboard", "Manage Projects", "Audit Log"]
+                ["Dashboard","Manage Projects","Audit Log"]
             )
             admin_dashboard(page)
-
-        elif st.session_state.role == "viewer":
+        elif st.session_state.role=="viewer":
             viewer_dashboard()
-
         else:
             page = st.sidebar.radio(
                 "User Pages",
-                ["Add Project", "My Projects"]
+                ["Add Project","My Projects"]
             )
             user_dashboard(page)
 
