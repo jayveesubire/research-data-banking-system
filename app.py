@@ -315,7 +315,7 @@ def user_dashboard(page):
             st.rerun()
 
     # ==================================================
-    # MY PROJECTS (VIEW + EDIT OWN)
+    # MY PROJECTS (VIEW + EDIT + DELETE OWN)
     # ==================================================
     if page == "My Projects":
         st.subheader("My Projects")
@@ -333,7 +333,7 @@ def user_dashboard(page):
 
         st.dataframe(format_df(df), use_container_width=True)
 
-        st.markdown("### Edit Selected Project")
+        st.markdown("### Edit / Delete Selected Project")
 
         pid = st.selectbox("Select Project ID", df["id"].tolist())
 
@@ -350,6 +350,7 @@ def user_dashboard(page):
         estaff = st.text_area("Project Staff", rec.project_staff)
         estart = st.text_input("Starting Date", rec.start_date)
         eend = st.text_input("Completion Date", rec.completion_date)
+
         safe_budget = float(rec.budget) if rec.budget not in (None, "", "NULL") else 0.0
         ebudget = st.number_input(
             "Budget",
@@ -357,38 +358,56 @@ def user_dashboard(page):
             value=safe_budget,
             format="%.2f"
         )
+
         efund = st.text_input("Fund Source", rec.fund_source)
         eloc = st.text_input("Location", rec.location)
         etype = st.text_input("Type of Research", rec.research_type)
         estatus = st.selectbox(
             "Status",
             ["New", "Completed", "Continuing", "On-going"],
-            index=["New","Completed","Continuing","On-going"].index(rec.status)
+            index=["New", "Completed", "Continuing", "On-going"].index(rec.status)
         )
         eremarks = st.text_area("Remarks", rec.remarks)
 
-        if st.button("Update My Project"):
-            cur = conn.cursor()
-            cur.execute("""
-                UPDATE projects SET
-                    project_title=?, project_leader=?, project_staff=?,
-                    start_date=?, completion_date=?, budget=?,
-                    fund_source=?, location=?, research_type=?,
-                    status=?, remarks=?
-                WHERE id=? AND user_id=?
-            """, (
-                etitle, eleader, estaff,
-                estart, eend, ebudget,
-                efund, eloc, etype,
-                estatus, eremarks,
-                pid, st.session_state.user_id
-            ))
-            conn.commit()
-            log_action("USER UPDATE", etitle)
-            st.success("Project updated successfully.")
-            st.rerun()
+        col1, col2 = st.columns(2)
 
-    conn.close()
+        # -------- UPDATE --------
+        with col1:
+            if st.button("Update My Project"):
+                cur = conn.cursor()
+                cur.execute("""
+                    UPDATE projects SET
+                        project_title=?, project_leader=?, project_staff=?,
+                        start_date=?, completion_date=?, budget=?,
+                        fund_source=?, location=?, research_type=?,
+                        status=?, remarks=?
+                    WHERE id=? AND user_id=?
+                """, (
+                    etitle, eleader, estaff,
+                    estart, eend, ebudget,
+                    efund, eloc, etype,
+                    estatus, eremarks,
+                    pid, st.session_state.user_id
+                ))
+                conn.commit()
+                log_action("USER UPDATE", etitle)
+                st.success("Project updated successfully.")
+                st.rerun()
+
+        # -------- DELETE --------
+        with col2:
+            if st.button("Delete My Project"):
+                cur = conn.cursor()
+                cur.execute(
+                    "DELETE FROM projects WHERE id=? AND user_id=?",
+                    (pid, st.session_state.user_id)
+                )
+                conn.commit()
+                log_action("USER DELETE", etitle)
+                st.warning("Project deleted.")
+                st.rerun()
+
+        conn.close()
 
 # ======================================================
 # SIDEBAR
