@@ -71,7 +71,6 @@ def init_db():
         ("CARES", "cares123", "user"),
         ("QARES", "qares123", "user"),
         ("RARES", "rares123", "user"),
-        ("viewer", "viewer123", "viewer"),
     ]
 
     for u in defaults:
@@ -127,26 +126,36 @@ st.markdown("""
 # ======================================================
 def login():
     st.subheader("Login")
+
     u = st.text_input("Username")
     p = st.text_input("Password", type="password")
 
-    if st.button("Login"):
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id, role FROM users WHERE username=? AND password=?",
-            (u, p)
-        )
-        user = cur.fetchone()
-        conn.close()
+    col1, col2 = st.columns(2)
 
-        if user:
-            st.session_state.user_id = user[0]
-            st.session_state.role = user[1]
-            st.session_state.username = u
+    with col1:
+        if st.button("Login"):
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, role FROM users WHERE username=? AND password=?",
+                (u, p)
+            )
+            user = cur.fetchone()
+            conn.close()
+
+            if user:
+                st.session_state.user_id = user[0]
+                st.session_state.role = user[1]
+                st.session_state.username = u
+                st.rerun()
+            else:
+                st.error("Invalid credentials")
+
+    with col2:
+        if st.button("View Encoded Projects"):
+            st.session_state.role = "viewer"
+            st.session_state.username = "PUBLIC VIEWER"
             st.rerun()
-        else:
-            st.error("Invalid credentials")
 
 # ======================================================
 # VIEWER (READ ONLY)
