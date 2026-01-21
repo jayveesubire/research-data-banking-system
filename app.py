@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 # ======================================================
-# GLOBAL STYLE (UPGRADED UI)
+# GLOBAL STYLE
 # ======================================================
 st.markdown("""
 <style>
@@ -28,15 +28,15 @@ st.markdown("""
     box-shadow:0 4px 14px rgba(0,0,0,0.08);
     margin-bottom:20px;
 }
-.kpi {
+.stat {
     background:linear-gradient(135deg,#1f7a1f,#3cb043);
     color:white;
-    padding:24px;
+    padding:22px;
     border-radius:18px;
     text-align:center;
 }
-.kpi h2 {margin:0;font-size:34px;}
-.kpi p {margin:0;font-size:14px;opacity:0.9;}
+.stat h2 {margin:0;font-size:34px;}
+.stat p {margin:0;font-size:14px;opacity:0.9;}
 h1,h2,h3 {color:#1f7a1f;}
 </style>
 """, unsafe_allow_html=True)
@@ -93,7 +93,7 @@ def init_db():
         ("RND","rnd123","user"),
         ("CARES","cares123","user"),
         ("QARES","qares123","user"),
-        ("RARES","rares123","user")
+        ("RARES","rares123","user"),
     ]
 
     for u in defaults:
@@ -140,15 +140,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ======================================================
-# AUTH
+# AUTHENTICATION
 # ======================================================
 def login():
     st.subheader("Login")
     u = st.text_input("Username")
     p = st.text_input("Password", type="password")
 
-    col1,col2 = st.columns(2)
-    with col1:
+    c1, c2 = st.columns(2)
+    with c1:
         if st.button("Login"):
             conn = get_db()
             cur = conn.cursor()
@@ -166,17 +166,17 @@ def login():
             else:
                 st.error("Invalid credentials")
 
-    with col2:
+    with c2:
         if st.button("View Encoded Projects"):
             st.session_state.role = "viewer"
             st.session_state.username = "PUBLIC VIEWER"
             st.rerun()
 
 # ======================================================
-# VIEWER
+# VIEWER (READ ONLY)
 # ======================================================
 def viewer_dashboard():
-    st.subheader("📄 All Research Projects (View Only)")
+    st.subheader("All Research Projects (View Only)")
     conn = get_db()
     df = pd.read_sql_query("SELECT * FROM projects", conn)
     conn.close()
@@ -184,13 +184,13 @@ def viewer_dashboard():
     search = st.text_input("Search Project Title")
     status = st.selectbox(
         "Filter Status",
-        ["All","New","On-going","Completed","Continuing"]
+        ["All","New","Completed","Continuing","On-going"]
     )
 
     if search:
         df = df[df["project_title"].str.contains(search, case=False)]
-    if status!="All":
-        df = df[df["status"]==status]
+    if status != "All":
+        df = df[df["status"] == status]
 
     st.dataframe(format_df(df), use_container_width=True)
 
@@ -201,41 +201,40 @@ def admin_dashboard(page):
     conn = get_db()
     df = pd.read_sql_query("SELECT * FROM projects", conn)
 
-    if page=="Dashboard":
-        st.subheader("📊 Admin Dashboard")
+    if page == "Dashboard":
+        st.subheader("Admin Dashboard")
 
         if df.empty:
-            st.info("No records available.")
+            st.info("No project records available.")
             return
 
         df["start_date"] = pd.to_datetime(df["start_date"], errors="coerce")
         df["year"] = df["start_date"].dt.year
         df["budget"] = df["budget"].fillna(0)
 
-        colf1,colf2 = st.columns(2)
-        with colf1:
-            status = st.selectbox(
+        f1, f2 = st.columns(2)
+        with f1:
+            status_filter = st.selectbox(
                 "Status",
                 ["All","New","On-going","Completed","Continuing"]
             )
-        with colf2:
+        with f2:
             years = sorted(df["year"].dropna().unique().tolist())
-            year = st.selectbox("Year", ["All"]+years)
+            year_filter = st.selectbox("Year", ["All"] + years)
 
         fdf = df.copy()
-        if status!="All":
-            fdf = fdf[fdf["status"]==status]
-        if year!="All":
-            fdf = fdf[fdf["year"]==year]
+        if status_filter != "All":
+            fdf = fdf[fdf["status"] == status_filter]
+        if year_filter != "All":
+            fdf = fdf[fdf["year"] == year_filter]
 
         k1,k2,k3 = st.columns(3)
-        k1.markdown(f"<div class='kpi'><h2>{len(fdf)}</h2><p>Total Projects</p></div>", unsafe_allow_html=True)
-        k2.markdown(f"<div class='kpi'><h2>₱{fdf['budget'].sum():,.0f}</h2><p>Total Budget</p></div>", unsafe_allow_html=True)
+        k1.markdown(f"<div class='stat'><h2>{len(fdf)}</h2><p>Total Projects</p></div>", unsafe_allow_html=True)
+        k2.markdown(f"<div class='stat'><h2>₱{fdf['budget'].sum():,.0f}</h2><p>Total Budget</p></div>", unsafe_allow_html=True)
         avg = fdf['budget'].mean() if len(fdf) else 0
-        k3.markdown(f"<div class='kpi'><h2>₱{avg:,.0f}</h2><p>Average Budget</p></div>", unsafe_allow_html=True)
+        k3.markdown(f"<div class='stat'><h2>₱{avg:,.0f}</h2><p>Average Budget</p></div>", unsafe_allow_html=True)
 
-        st.markdown("---")
-
+        c1,c2 = st.columns(2)
         if not fdf.empty:
             fig1 = px.bar(
                 fdf.groupby("status")["budget"].sum().reset_index(),
@@ -249,19 +248,18 @@ def admin_dashboard(page):
                 markers=True,
                 title="Budget Trend by Year"
             )
-            c1,c2 = st.columns(2)
             c1.plotly_chart(fig1, use_container_width=True)
             c2.plotly_chart(fig2, use_container_width=True)
 
         st.markdown("### Project Records")
         st.dataframe(format_df(fdf), use_container_width=True)
 
-    if page=="Manage Projects":
+    if page == "Manage Projects":
         st.subheader("Manage Projects")
         st.dataframe(format_df(df), use_container_width=True)
 
         pid = st.selectbox("Select Project ID", df["id"].tolist())
-        rec = df[df["id"]==pid].iloc[0]
+        rec = df[df["id"] == pid].iloc[0]
 
         title = st.text_input("Project Title", rec.project_title)
         status = st.selectbox(
@@ -291,7 +289,7 @@ def admin_dashboard(page):
                 st.warning("Deleted")
                 st.rerun()
 
-    if page=="Audit Log":
+    if page == "Audit Log":
         st.subheader("Audit Log")
         log_df = pd.read_sql_query(
             "SELECT * FROM audit_log ORDER BY id DESC", conn
@@ -301,12 +299,12 @@ def admin_dashboard(page):
     conn.close()
 
 # ======================================================
-# USER DASHBOARD
+# USER / ENCODER
 # ======================================================
 def user_dashboard(page):
     conn = get_db()
 
-    if page=="Add Project":
+    if page == "Add Project":
         st.subheader("Add New Project")
         title = st.text_input("Project Title")
         leader = st.text_input("Project Leader")
@@ -342,7 +340,7 @@ def user_dashboard(page):
             st.success("Saved")
             st.rerun()
 
-    if page=="My Projects":
+    if page == "My Projects":
         df = pd.read_sql_query(
             "SELECT * FROM projects WHERE user_id=?",
             conn, params=(st.session_state.user_id,)
@@ -351,7 +349,7 @@ def user_dashboard(page):
         st.dataframe(format_df(df), use_container_width=True)
 
         pid = st.selectbox("Select Project ID", df["id"].tolist())
-        rec = df[df["id"]==pid].iloc[0]
+        rec = df[df["id"] == pid].iloc[0]
 
         title = st.text_input("Project Title", rec.project_title)
         status = st.selectbox(
@@ -408,13 +406,13 @@ def main():
             st.session_state.clear()
             st.rerun()
 
-        if st.session_state.role=="admin":
+        if st.session_state.role == "admin":
             page = st.sidebar.radio(
                 "Admin Pages",
                 ["Dashboard","Manage Projects","Audit Log"]
             )
             admin_dashboard(page)
-        elif st.session_state.role=="viewer":
+        elif st.session_state.role == "viewer":
             viewer_dashboard()
         else:
             page = st.sidebar.radio(
