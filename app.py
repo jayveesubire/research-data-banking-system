@@ -228,7 +228,13 @@ def admin_dashboard(page):
         download_excel(format_df(df), "all_projects.xlsx")
 
         pid = st.selectbox("Select Project ID", df["id"])
-        rec = df[df["id"]==pid].iloc[0]
+        record_df = df[df["id"] == pid]
+
+        if record_df.empty:
+            st.warning("Selected project no longer exists.")
+            return
+
+        rec = record_df.iloc[0]
 
         with st.form("admin_edit"):
             title = st.text_input("Project Title", rec.project_title)
