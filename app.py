@@ -309,7 +309,13 @@ def user_dashboard(page):
         download_excel(format_df(df), "my_projects.xlsx")
 
         pid = st.selectbox("Select Project ID", df["id"])
-        rec = df[df["id"]==pid].iloc[0]
+        record_df = df[df["id"] == pid]
+
+        if record_df.empty:
+            st.warning("Selected project no longer exists. Please select another project.")
+            return
+
+        rec = record_df.iloc[0]
 
         with st.form("user_edit"):
             title = st.text_input("Project Title", rec.project_title)
